@@ -192,11 +192,9 @@ function setupDrawingTools() {
     // Tool buttons
     const brushTool = document.getElementById('brushTool');
     const fillTool = document.getElementById('fillTool');
-    const eraserTool = document.getElementById('eraserTool');
     
     brushTool.addEventListener('click', () => selectTool('brush'));
     fillTool.addEventListener('click', () => selectTool('fill'));
-    eraserTool.addEventListener('click', () => selectTool('eraser'));
     
     // Brush size
     const brushSize = document.getElementById('brushSize');
@@ -225,9 +223,6 @@ function selectTool(tool) {
     } else if (tool === 'fill') {
         document.getElementById('fillTool').classList.add('active');
         canvas.style.cursor = 'pointer';
-    } else if (tool === 'eraser') {
-        document.getElementById('eraserTool').classList.add('active');
-        canvas.style.cursor = 'grab';
     }
 }
 
@@ -484,19 +479,12 @@ function redrawCanvas() {
                 ctx.lineWidth = item[i].size;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                
-                if (item[i].tool === 'eraser') {
-                    ctx.globalCompositeOperation = 'destination-out';
-                } else {
-                    ctx.globalCompositeOperation = 'source-over';
-                    ctx.strokeStyle = item[i].color;
-                }
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.strokeStyle = item[i].color;
                 
                 ctx.lineTo(item[i].x, item[i].y);
                 ctx.stroke();
             }
-            
-            ctx.globalCompositeOperation = 'source-over';
         }
     });
     
