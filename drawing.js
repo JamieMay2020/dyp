@@ -184,7 +184,7 @@ function updateCoordinates(e) {
     const rect = canvas.getBoundingClientRect();
     const x = e ? Math.floor(e.clientX - rect.left) : 0;
     const y = e ? Math.floor(e.clientY - rect.top) : 0;
-    document.getElementById('coordinates').textContent = ${x}, ${y};
+    document.getElementById('coordinates').textContent = `${x}, ${y}`;
 }
 
 // Drawing Tools Setup
@@ -192,11 +192,9 @@ function setupDrawingTools() {
     // Tool buttons
     const brushTool = document.getElementById('brushTool');
     const fillTool = document.getElementById('fillTool');
-    const eraserTool = document.getElementById('eraserTool');
     
     brushTool.addEventListener('click', () => selectTool('brush'));
     fillTool.addEventListener('click', () => selectTool('fill'));
-    eraserTool.addEventListener('click', () => selectTool('eraser'));
     
     // Brush size
     const brushSize = document.getElementById('brushSize');
@@ -204,7 +202,7 @@ function setupDrawingTools() {
     
     brushSize.addEventListener('input', (e) => {
         currentSize = parseInt(e.target.value);
-        sizeDisplay.textContent = ${currentSize}px;
+        sizeDisplay.textContent = `${currentSize}px`;
     });
     
     // Action buttons
@@ -225,9 +223,6 @@ function selectTool(tool) {
     } else if (tool === 'fill') {
         document.getElementById('fillTool').classList.add('active');
         canvas.style.cursor = 'pointer';
-    } else if (tool === 'eraser') {
-        document.getElementById('eraserTool').classList.add('active');
-        canvas.style.cursor = 'grab';
     }
 }
 
@@ -339,7 +334,7 @@ function fillArea(e) {
     
     while (stack.length > 0) {
         const [cx, cy] = stack.pop();
-        const key = ${cx},${cy};
+        const key = `${cx},${cy}`;
         
         if (filled.has(key) || cx < 0 || cx >= canvas.width || cy < 0 || cy >= canvas.height) continue;
         
@@ -406,7 +401,7 @@ function floodFill(pixels, x, y, width, height, targetColor, fillColor) {
     
     while (stack.length > 0) {
         const [cx, cy] = stack.pop();
-        const key = ${cx},${cy};
+        const key = `${cx},${cy}`;
         
         if (visited.has(key) || cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
         
@@ -539,7 +534,7 @@ async function completePill() {
                 
                 // Create pill object
                 const newPill = {
-                    id: pill-${Date.now()},
+                    id: `pill-${Date.now()}`,
                     name: pillName,
                     imageUrl: base64data,
                     creator: generateWalletAddress(),
