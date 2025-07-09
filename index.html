@@ -1,125 +1,126 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Draw Your Own Pill</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Draw Your Own Pill</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <!-- Top Notification Bar -->
-    <div class="notification-bar">
-    </div>
+  <!-- Top Notification Bar -->
+  <div class="notification-bar"></div>
 
-    <div class="app-container">
-        <!-- Header -->
-        <header class="header">
-            <div class="logo">
-                <span class="logo-text">draw.pill</span>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <span class="logo-text">draw.pill</span>
+      </div>
+
+      <nav class="nav">
+        <a href="index.html" class="nav-link active">home</a>
+        <a href="gallery.html" class="nav-link">gallery</a>
+        <a href="hall-of-fame.html" class="nav-link">hall of fame</a>
+      </nav>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <div class="creation-container">
+        <h1 class="main-title">create your pill</h1>
+        <p class="main-subtitle">draw on the pill canvas below</p>
+
+        <!-- Canvas Section -->
+        <div class="canvas-section">
+          <div class="canvas-wrapper" style="position: relative; width: 500px; height: 500px;">
+            <canvas id="baseCanvas" width="500" height="500" style="position: absolute; left: 0; top: 0; z-index: 0;"></canvas>
+            <canvas id="drawingCanvas" width="500" height="500" style="position: absolute; left: 0; top: 0; z-index: 1;"></canvas>
+            <div class="coordinates-display" style="position: absolute; bottom: 5px; left: 5px; z-index: 2;">
+              <span id="coordinates">0, 0</span>
             </div>
-            
-            <nav class="nav">
-                <a href="index.html" class="nav-link active">home</a>
-                <a href="gallery.html" class="nav-link">gallery</a>
-                <a href="hall-of-fame.html" class="nav-link">hall of fame</a>
-            </nav>
-        </header>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <div class="creation-container">
-                <h1 class="main-title">create your pill</h1>
-                <p class="main-subtitle">draw on the pill canvas below</p>
-
-                <!-- Canvas Section -->
-                <div class="canvas-section">
-                    <div class="canvas-wrapper">
-                        <canvas id="drawingCanvas"></canvas>
-                        <div class="coordinates-display">
-                            <span id="coordinates">0, 0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Controls Section -->
-                <div class="controls-section">
-                    <!-- Drawing Tools -->
-                    <div class="control-group">
-                        <label>tools</label>
-                        <div class="tool-buttons">
-                            <button id="brushTool" class="tool-btn active">brush</button>
-                            <button id="fillTool" class="tool-btn">fill</button>
-                            <button id="eraserTool" class="tool-btn">eraser</button>
-                        </div>
-                    </div>
-
-                    <!-- Brush Size -->
-                    <div class="control-group">
-                        <label>size <span id="sizeDisplay">5px</span></label>
-                        <input type="range" id="brushSize" min="1" max="50" value="5" class="size-slider">
-                    </div>
-
-                    <!-- Colors -->
-                    <div class="control-group">
-                        <label>colors</label>
-                        <div class="color-controls">
-                            <div class="color-palette">
-                                <div class="color-box selected" data-color="#000000" style="background-color: #000000"></div>
-                                <div class="color-box" data-color="#FFFFFF" style="background-color: #FFFFFF"></div>
-                                <div class="color-box" data-color="#FF0000" style="background-color: #FF0000"></div>
-                                <div class="color-box" data-color="#00FF00" style="background-color: #00FF00"></div>
-                                <div class="color-box" data-color="#0000FF" style="background-color: #0000FF"></div>
-                                <div class="color-box" data-color="#FFFF00" style="background-color: #FFFF00"></div>
-                                <div class="color-box" data-color="#FF00FF" style="background-color: #FF00FF"></div>
-                                <div class="color-box" data-color="#00FFFF" style="background-color: #00FFFF"></div>
-                                <div class="color-box" data-color="#FFA500" style="background-color: #FFA500"></div>
-                                <div class="color-box" data-color="#800080" style="background-color: #800080"></div>
-                            </div>
-                            <input type="color" id="colorPicker" class="color-picker">
-                        </div>
-                    </div>
-
-                    <!-- Actions -->
-                    <div class="control-group">
-                        <div class="action-buttons">
-                            <button id="undoBtn" class="action-btn">undo</button>
-                            <button id="clearBtn" class="action-btn">clear</button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Pill Details -->
-                <div class="details-section">
-                    <div class="detail-group">
-                        <label>pill name</label>
-                        <input type="text" id="pillNameInput" placeholder="enter pill name" maxlength="50">
-                    </div>
-                    
-                    <button id="completeBtn" class="complete-btn" disabled>create pill</button>
-                </div>
-            </div>
-        </main>
-    </div>
-
-    <!-- Completion Modal -->
-    <div id="completionModal" class="modal">
-        <div class="modal-content">
-            <h2>pill created successfully</h2>
-            <p>your pill has been added to the gallery</p>
-            <div class="modal-buttons">
-                <button onclick="window.location.href='gallery.html'" class="modal-btn primary">view gallery</button>
-                <button onclick="location.reload()" class="modal-btn secondary">create another</button>
-            </div>
+          </div>
         </div>
-    </div>
 
-    <!-- Rate Limit Warning -->
-    <div id="rateLimitWarning" class="rate-limit-warning hidden">
-        <p>please wait <span id="cooldownTime">60</span> seconds before creating another pill</p>
-    </div>
+        <!-- Controls Section -->
+        <div class="controls-section">
+          <!-- Drawing Tools -->
+          <div class="control-group">
+            <label>tools</label>
+            <div class="tool-buttons">
+              <button id="brushTool" class="tool-btn active">brush</button>
+              <button id="fillTool" class="tool-btn">fill</button>
+              <button id="eraserTool" class="tool-btn">eraser</button>
+            </div>
+          </div>
 
-    <script src="firebase-config.js"></script>
-    <script src="notifications.js"></script>
-    <script src="drawing.js"></script>
+          <!-- Brush Size -->
+          <div class="control-group">
+            <label>size <span id="sizeDisplay">5px</span></label>
+            <input type="range" id="brushSize" min="1" max="50" value="5" class="size-slider">
+          </div>
+
+          <!-- Colors -->
+          <div class="control-group">
+            <label>colors</label>
+            <div class="color-controls">
+              <div class="color-palette">
+                <div class="color-box selected" data-color="#000000" style="background-color: #000000"></div>
+                <div class="color-box" data-color="#FFFFFF" style="background-color: #FFFFFF"></div>
+                <div class="color-box" data-color="#FF0000" style="background-color: #FF0000"></div>
+                <div class="color-box" data-color="#00FF00" style="background-color: #00FF00"></div>
+                <div class="color-box" data-color="#0000FF" style="background-color: #0000FF"></div>
+                <div class="color-box" data-color="#FFFF00" style="background-color: #FFFF00"></div>
+                <div class="color-box" data-color="#FF00FF" style="background-color: #FF00FF"></div>
+                <div class="color-box" data-color="#00FFFF" style="background-color: #00FFFF"></div>
+                <div class="color-box" data-color="#FFA500" style="background-color: #FFA500"></div>
+                <div class="color-box" data-color="#800080" style="background-color: #800080"></div>
+              </div>
+              <input type="color" id="colorPicker" class="color-picker">
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="control-group">
+            <div class="action-buttons">
+              <button id="undoBtn" class="action-btn">undo</button>
+              <button id="clearBtn" class="action-btn">clear</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pill Details -->
+        <div class="details-section">
+          <div class="detail-group">
+            <label>pill name</label>
+            <input type="text" id="pillNameInput" placeholder="enter pill name" maxlength="50">
+          </div>
+
+          <button id="completeBtn" class="complete-btn" disabled>create pill</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Completion Modal -->
+  <div id="completionModal" class="modal">
+    <div class="modal-content">
+      <h2>pill created successfully</h2>
+      <p>your pill has been added to the gallery</p>
+      <div class="modal-buttons">
+        <button onclick="window.location.href='gallery.html'" class="modal-btn primary">view gallery</button>
+        <button onclick="location.reload()" class="modal-btn secondary">create another</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rate Limit Warning -->
+  <div id="rateLimitWarning" class="rate-limit-warning hidden">
+    <p>please wait <span id="cooldownTime">60</span> seconds before creating another pill</p>
+  </div>
+
+  <!-- Scripts -->
+  <script src="firebase-config.js"></script>
+  <script src="notifications.js"></script>
+  <script src="drawing.js"></script>
 </body>
 </html>
