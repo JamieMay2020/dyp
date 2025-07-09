@@ -1,13 +1,11 @@
 // Canvas and Drawing Variables
 let canvas, ctx;
-let baseCanvas, baseCtx; // Separate canvas for the base image
 let isDrawing = false;
 let currentColor = '#000000';
 let currentSize = 5;
 let currentTool = 'brush';
 let drawingHistory = [];
 let currentPath = [];
-let baseImageData = null; // Store the base image
 
 // Rate Limiting
 let createdPills = [];
@@ -120,15 +118,12 @@ function convertToOutline() {
 
 // Fallback function to draw a pill shape if image doesn't load
 function drawDefaultPillShape() {
-    // Clear both canvases
     ctx.fillStyle = 'white';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    baseCtx.fillStyle = 'white';
-    baseCtx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
     
-    // Draw pill outline on base canvas
-    baseCtx.strokeStyle = '#000000';
-    baseCtx.lineWidth = 3;
+    // Draw pill outline centered in square canvas
+    ctx.strokeStyle = '#e5e5e5';
+    ctx.lineWidth = 3;
     
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
@@ -137,19 +132,15 @@ function drawDefaultPillShape() {
     const radius = height / 2;
     
     // Draw capsule shape
-    baseCtx.beginPath();
-    baseCtx.arc(centerX - width/2 + radius, centerY, radius, Math.PI/2, Math.PI*1.5);
-    baseCtx.lineTo(centerX + width/2 - radius, centerY - radius);
-    baseCtx.arc(centerX + width/2 - radius, centerY, radius, Math.PI*1.5, Math.PI/2);
-    baseCtx.lineTo(centerX - width/2 + radius, centerY + radius);
-    baseCtx.closePath();
-    baseCtx.stroke();
+    ctx.beginPath();
+    ctx.arc(centerX - width/2 + radius, centerY, radius, Math.PI/2, Math.PI*1.5);
+    ctx.lineTo(centerX + width/2 - radius, centerY - radius);
+    ctx.arc(centerX + width/2 - radius, centerY, radius, Math.PI*1.5, Math.PI/2);
+    ctx.lineTo(centerX - width/2 + radius, centerY + radius);
+    ctx.closePath();
+    ctx.stroke();
     
-    // Store the base image data
-    baseImageData = baseCtx.getImageData(0, 0, baseCanvas.width, baseCanvas.height);
-    
-    // Draw on main canvas
-    redrawCanvas();
+    saveCanvasState();
 }
 
 // Setup Canvas
@@ -158,12 +149,6 @@ function setupCanvas() {
     ctx = canvas.getContext('2d');
     canvas.width = 500;
     canvas.height = 500;
-    
-    // Create a separate canvas for the base image
-    baseCanvas = document.createElement('canvas');
-    baseCtx = baseCanvas.getContext('2d');
-    baseCanvas.width = 500;
-    baseCanvas.height = 500;
 
     // Event listeners
     canvas.addEventListener('mousedown', startDrawing);
@@ -192,9 +177,11 @@ function setupDrawingTools() {
     // Tool buttons
     const brushTool = document.getElementById('brushTool');
     const fillTool = document.getElementById('fillTool');
+    const eraserTool = document.getElementById('eraserTool');
     
     brushTool.addEventListener('click', () => selectTool('brush'));
     fillTool.addEventListener('click', () => selectTool('fill'));
+    eraserTool.addEventListener('click', () => selectTool('eraser'));
     
     // Brush size
     const brushSize = document.getElementById('brushSize');
@@ -223,6 +210,9 @@ function selectTool(tool) {
     } else if (tool === 'fill') {
         document.getElementById('fillTool').classList.add('active');
         canvas.style.cursor = 'pointer';
+    } else if (tool === 'eraser') {
+        document.getElementById('eraserTool').classList.add('active');
+        canvas.style.cursor = 'grab';
     }
 }
 
@@ -311,7 +301,7 @@ function stopDrawing() {
     ctx.globalCompositeOperation = 'source-over';
 }
 
-// Fill tool with better implementation
+// Fill tool with improved boundary detection
 function fillArea(e) {
     const rect = canvas.getBoundingClientRect();
     const x = Math.floor(e.clientX - rect.left);
@@ -325,46 +315,45 @@ function fillArea(e) {
     // Don't fill if clicking on the same color
     if (colorsMatch(targetColor, fillColor)) return;
     
-    // Don't fill if clicking on black
-    if (targetColor.r < 50 && targetColor.g < 50 && targetColor.b < 50) return;
+    // Improved flood fill that respects black boundaries
+    floodFillWithBoundary(pixels, x, y, canvas.width, canvas.height, targetColor, fillColor);
+    ctx.putImageData(imageData, 0, 0);
     
-    // Simple flood fill
-    const filled = new Set();
+    saveCanvasState();
+}
+
+// Improved flood fill that respects boundaries
+function floodFillWithBoundary(pixels, x, y, width, height, targetColor, fillColor) {
     const stack = [[x, y]];
+    const visited = new Set();
+    
+    // Define black as boundary (with some tolerance for anti-aliasing)
+    const isBoundary = (color) => {
+        return color.r < 50 && color.g < 50 && color.b < 50 && color.a > 200;
+    };
     
     while (stack.length > 0) {
         const [cx, cy] = stack.pop();
         const key = `${cx},${cy}`;
         
-        if (filled.has(key) || cx < 0 || cx >= canvas.width || cy < 0 || cy >= canvas.height) continue;
+        if (visited.has(key) || cx < 0 || cx >= width || cy < 0 || cy >= height) continue;
         
-        const idx = (cy * canvas.width + cx) * 4;
-        const currentColor = {
-            r: pixels[idx],
-            g: pixels[idx + 1],
-            b: pixels[idx + 2],
-            a: pixels[idx + 3]
-        };
+        const currentColor = getPixelColor(pixels, cx, cy, width);
         
-        // Skip if not target color or if it's black (boundary)
-        if (!colorsMatch(currentColor, targetColor) || (currentColor.r < 50 && currentColor.g < 50 && currentColor.b < 50)) {
-            continue;
-        }
+        // Stop at black boundaries or if color doesn't match target
+        if (isBoundary(currentColor) || !colorsMatch(currentColor, targetColor)) continue;
         
-        filled.add(key);
+        visited.add(key);
         
-        // Fill pixel
-        pixels[idx] = fillColor.r;
-        pixels[idx + 1] = fillColor.g;
-        pixels[idx + 2] = fillColor.b;
-        pixels[idx + 3] = fillColor.a;
+        const index = (cy * width + cx) * 4;
+        pixels[index] = fillColor.r;
+        pixels[index + 1] = fillColor.g;
+        pixels[index + 2] = fillColor.b;
+        pixels[index + 3] = fillColor.a;
         
-        // Add neighbors
+        // Add neighboring pixels
         stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
     }
-    
-    ctx.putImageData(imageData, 0, 0);
-    saveCanvasState();
 }
 
 // Helper functions for fill
@@ -388,11 +377,8 @@ function hexToRgb(hex) {
     } : null;
 }
 
-function colorsMatch(c1, c2, tolerance = 5) {
-    return Math.abs(c1.r - c2.r) < tolerance &&
-           Math.abs(c1.g - c2.g) < tolerance &&
-           Math.abs(c1.b - c2.b) < tolerance &&
-           Math.abs(c1.a - c2.a) < tolerance;
+function colorsMatch(c1, c2) {
+    return c1.r === c2.r && c1.g === c2.g && c1.b === c2.b && c1.a === c2.a;
 }
 
 function floodFill(pixels, x, y, width, height, targetColor, fillColor) {
@@ -444,54 +430,40 @@ function undo() {
 function clearCanvas() {
     if (confirm('Are you sure you want to clear everything?')) {
         drawingHistory = [];
-        redrawCanvas();
+        loadPillBase();
     }
 }
 
-// Redraw canvas with proper layering
+// Redraw canvas
 function redrawCanvas() {
-    // Clear the main canvas
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    loadPillBase();
     
-    // Redraw all the drawing history FIRST (underneath)
-    drawingHistory.forEach(item => {
-        if (item.type === 'fill') {
-            // Apply fill
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const pixels = imageData.data;
+    setTimeout(() => {
+        drawingHistory.forEach(path => {
+            if (path.length === 0) return;
             
-            item.pixels.forEach(([x, y]) => {
-                const idx = (y * canvas.width + x) * 4;
-                pixels[idx] = item.color.r;
-                pixels[idx + 1] = item.color.g;
-                pixels[idx + 2] = item.color.b;
-                pixels[idx + 3] = 255;
-            });
-            
-            ctx.putImageData(imageData, 0, 0);
-        } else if (item.length > 0) {
-            // Draw path
             ctx.beginPath();
-            ctx.moveTo(item[0].x, item[0].y);
+            ctx.moveTo(path[0].x, path[0].y);
             
-            for (let i = 1; i < item.length; i++) {
-                ctx.lineWidth = item[i].size;
+            for (let i = 1; i < path.length; i++) {
+                ctx.lineWidth = path[i].size;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                ctx.globalCompositeOperation = 'source-over';
-                ctx.strokeStyle = item[i].color;
                 
-                ctx.lineTo(item[i].x, item[i].y);
+                if (path[i].tool === 'eraser') {
+                    ctx.globalCompositeOperation = 'destination-out';
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.strokeStyle = path[i].color;
+                }
+                
+                ctx.lineTo(path[i].x, path[i].y);
                 ctx.stroke();
             }
-        }
-    });
-    
-    // Draw the base image ON TOP with multiply blend mode
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.drawImage(baseCanvas, 0, 0);
-    ctx.globalCompositeOperation = 'source-over';
+            
+            ctx.globalCompositeOperation = 'source-over';
+        });
+    }, 100);
 }
 
 // Save canvas state
