@@ -22,13 +22,13 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupCanvas() {
     // Main display canvas
     canvas = document.getElementById('drawingCanvas');
-    ctx = canvas.getContext('2d');
+    ctx = canvas.getContext('2d', { willReadFrequently: true });
     canvas.width = 500;
     canvas.height = 500;
     
     // Create a separate canvas for drawings only (not visible)
     drawingCanvas = document.createElement('canvas');
-    drawingCtx = drawingCanvas.getContext('2d');
+    drawingCtx = drawingCanvas.getContext('2d', { willReadFrequently: true });
     drawingCanvas.width = 500;
     drawingCanvas.height = 500;
 
@@ -77,7 +77,7 @@ function createDefaultPill() {
     const tempCanvas = document.createElement('canvas');
     tempCanvas.width = 500;
     tempCanvas.height = 500;
-    const tempCtx = tempCanvas.getContext('2d');
+    const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
     
     // White background
     tempCtx.fillStyle = 'white';
