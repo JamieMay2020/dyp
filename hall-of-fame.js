@@ -1,14 +1,41 @@
 // Hall of Fame Variables
 let topPills = [];
+let unsubscribe = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    loadTopPills();
+    // Wait for auth to be ready
+    setTimeout(() => {
+        loadTopPills();
+    }, 1000);
 });
 
-// Load top pills from user-created pills
+// Load top pills from Firebase
 function loadTopPills() {
-    // Get all user pills from localStorage
+    try {
+        // Set up real-time listener for top pills
+        if (unsubscribe) {
+            unsubscribe();
+        }
+        
+        unsubscribe = listenToTopPills((pills) => {
+            topPills = pills;
+            if (topPills.length > 0) {
+                displayTopPills();
+            } else {
+                // If no pills from Firebase, check localStorage
+                loadLocalTopPills();
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error loading top pills:', error);
+        loadLocalTopPills();
+    }
+}
+
+// Load top pills from localStorage as fallback
+function loadLocalTopPills() {
     const savedPills = localStorage.getItem('userPills');
     
     if (savedPills) {
@@ -52,10 +79,12 @@ function displayEmptyState() {
     `;
 }
 
-// Create top pill card
+// Create top pill card with upvote functionality
 function createTopPillCard(pill, rank) {
     const card = document.createElement('div');
     card.className = 'top-pill-card';
+    
+    const timeStr = pill.createdAt ? formatFirebaseTime(pill.createdAt) : formatTime(pill.createdAt);
     
     card.innerHTML = `
         <div class="rank-badge">#${rank}</div>
@@ -64,15 +93,99 @@ function createTopPillCard(pill, rank) {
             <div class="pill-name">${pill.name}</div>
             <div class="pill-meta">
                 <span class="pill-creator">created by ${pill.creator}</span>
-                <span class="pill-stats">${pill.upvotes || 0} upvotes</span>
+                <span class="pill-time">${timeStr}</span>
+            </div>
+            <div class="pill-actions">
+                <button class="upvote-btn" data-pill-id="${pill.id}" data-upvoted="false">
+                    <span class="upvote-icon">▲</span>
+                    <span class="upvote-count">${pill.upvotes || 0}</span>
+                </button>
             </div>
         </div>
     `;
     
+    // Add upvote functionality
+    const upvoteBtn = card.querySelector('.upvote-btn');
+    setupUpvoteButton(upvoteBtn, pill);
+    
     return card;
 }
 
-// CSS Animation
+// Setup upvote button
+async function setupUpvoteButton(button, pill) {
+    // Check if user has already upvoted
+    try {
+        const userUpvotes = await getUserUpvotes();
+        if (userUpvotes.includes(pill.id)) {
+            button.dataset.upvoted = 'true';
+            button.classList.add('upvoted');
+        }
+    } catch (error) {
+        console.error('Error checking upvotes:', error);
+    }
+    
+    // Add click handler
+    button.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const isUpvoted = button.dataset.upvoted === 'true';
+        
+        // Optimistic UI update
+        const countSpan = button.querySelector('.upvote-count');
+        const currentCount = parseInt(countSpan.textContent) || 0;
+        
+        if (isUpvoted) {
+            button.dataset.upvoted = 'false';
+            button.classList.remove('upvoted');
+            countSpan.textContent = Math.max(0, currentCount - 1);
+        } else {
+            button.dataset.upvoted = 'true';
+            button.classList.add('upvoted');
+            countSpan.textContent = currentCount + 1;
+        }
+        
+        // Update in Firebase
+        try {
+            const result = await toggleUpvoteFirebase(pill.id, isUpvoted);
+            if (!result.success) {
+                // Revert on error
+                if (isUpvoted) {
+                    button.dataset.upvoted = 'true';
+                    button.classList.add('upvoted');
+                    countSpan.textContent = currentCount;
+                } else {
+                    button.dataset.upvoted = 'false';
+                    button.classList.remove('upvoted');
+                    countSpan.textContent = currentCount;
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling upvote:', error);
+        }
+    });
+}
+
+// Format time for local storage items
+function formatTime(timestamp) {
+    if (!timestamp) return 'just now';
+    
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+    
+    if (diff < 60000) {
+        return 'just now';
+    } else if (diff < 3600000) {
+        return `${Math.floor(diff / 60000)}m ago`;
+    } else if (diff < 86400000) {
+        return `${Math.floor(diff / 3600000)}h ago`;
+    } else {
+        return `${Math.floor(diff / 86400000)}d ago`;
+    }
+}
+
+// CSS Animation and Styles
 const style = document.createElement('style');
 style.textContent = `
     @keyframes fadeIn {
@@ -85,5 +198,51 @@ style.textContent = `
             transform: translateY(0);
         }
     }
+    
+    .pill-actions {
+        margin-top: 12px;
+    }
+    
+    .upvote-btn {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 6px 12px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s;
+        font-size: 14px;
+    }
+    
+    .upvote-btn:hover {
+        background: var(--hover-bg);
+        color: var(--text-primary);
+        transform: translateY(-1px);
+    }
+    
+    .upvote-btn.upvoted {
+        background: var(--accent-green);
+        color: var(--bg-primary);
+        border-color: var(--accent-green);
+    }
+    
+    .upvote-icon {
+        font-size: 12px;
+    }
+    
+    .pill-time {
+        color: var(--text-tertiary);
+        font-size: 12px;
+    }
 `;
 document.head.appendChild(style);
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    if (unsubscribe) {
+        unsubscribe();
+    }
+});
