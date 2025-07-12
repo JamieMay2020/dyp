@@ -1,19 +1,19 @@
 // Firebase Configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyAUIRx31KxT-TNL5I_xPOvYDb8xInlXaA8",
-    authDomain: "dyp2-63174.firebaseapp.com",
-    projectId: "dyp2-63174",
-    storageBucket: "dyp2-63174.firebasestorage.app",
-    messagingSenderId: "69863725624",
-    appId: "1:69863725624:web:09691d193f3b6a5795e4cd",
-    measurementId: "G-69DQ7CDYHM"
+    apiKey: "AIzaSyCI4uPT5pFpKHUUavGsX5OsmdPc5ovPFVA",
+    authDomain: "todd-fc21e.firebaseapp.com",
+    projectId: "todd-fc21e",
+    storageBucket: "todd-fc21e.firebasestorage.app",
+    messagingSenderId: "1049247804525",
+    appId: "1:1049247804525:web:834887b062df13b6316364",
+    measurementId: "G-BEJPDEKKLR"
 };
 
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const storage = firebase.storage();
 const auth = firebase.auth();
-// Note: We're not using Firebase Storage to stay on the free plan
 
 // Initialize anonymous auth
 auth.signInAnonymously().catch((error) => {
@@ -28,7 +28,7 @@ auth.onAuthStateChanged((user) => {
 
 // === FIRESTORE FUNCTIONS ===
 
-// Create a new pill in Firestore (using base64 instead of Storage)
+// Create a new pill in Firestore (using Firebase Storage)
 async function createPill(imageBlob, pillName) {
     try {
         if (!currentUser) {
@@ -41,26 +41,20 @@ async function createPill(imageBlob, pillName) {
             return { success: false, error: "Rate limit exceeded" };
         }
 
-        // Convert blob to base64
-        const reader = new FileReader();
-        const base64Promise = new Promise((resolve, reject) => {
-            reader.onloadend = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(imageBlob);
-        });
+        // Upload image to Storage
+        const timestamp = Date.now();
+        const filename = `${timestamp}_${pillName.replace(/[^a-z0-9]/gi, '_')}.png`;
+        const imageRef = storage.ref(`pills/${filename}`);
+        
+        console.log('Uploading image to Storage...');
+        const snapshot = await imageRef.put(imageBlob);
+        const imageUrl = await snapshot.ref.getDownloadURL();
+        console.log('Image uploaded successfully:', imageUrl);
 
-        const base64Image = await base64Promise;
-
-        // Check size (Firestore documents have a 1MB limit)
-        const sizeInBytes = new Blob([base64Image]).size;
-        if (sizeInBytes > 900000) { // ~900KB to be safe
-            return { success: false, error: "Image too large. Please create a smaller drawing." };
-        }
-
-        // Create pill document in Firestore with base64 image
+        // Create pill document in Firestore
         const pillData = {
             name: pillName,
-            imageUrl: base64Image, // Store base64 directly
+            imageUrl: imageUrl,
             creator: generateWalletAddress(),
             creatorId: currentUser.uid,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -68,7 +62,9 @@ async function createPill(imageBlob, pillName) {
             upvotedBy: []
         };
 
+        console.log('Creating pill document in Firestore...');
         const docRef = await db.collection('pills').add(pillData);
+        console.log('Pill created successfully with ID:', docRef.id);
 
         // Update user's rate limit
         await updateRateLimit();
@@ -76,7 +72,7 @@ async function createPill(imageBlob, pillName) {
         return { 
             success: true, 
             pillId: docRef.id,
-            pill: { ...pillData, id: docRef.id }
+            pill: { ...pillData, id: docRef.id, imageUrl: imageUrl }
         };
 
     } catch (error) {
@@ -108,33 +104,95 @@ async function getUserPills() {
 // Get all pills for gallery
 async function getAllPills() {
     try {
+        console.log('Fetching all pills from Firestore...');
         const snapshot = await db.collection('pills')
             .orderBy('createdAt', 'desc')
             .limit(50)
             .get();
 
-        return snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        console.log('Firestore query complete. Docs found:', snapshot.size);
+        
+        const pills = snapshot.docs.map(doc => {
+            const data = doc.data();
+            console.log('Processing pill:', doc.id, data);
+            
+            // Convert Firestore timestamp to Date
+            if (data.createdAt && data.createdAt.toDate) {
+                data.createdAt = data.createdAt.toDate();
+            }
+            
+            return {
+                id: doc.id,
+                ...data
+            };
+        });
+        
+        console.log('Processed pills:', pills);
+        return pills;
     } catch (error) {
         console.error("Error getting pills:", error);
+        
+        // If it's a permission error, try without ordering
+        if (error.code === 'permission-denied' || error.message.includes('index')) {
+            console.log('Trying without orderBy...');
+            try {
+                const snapshot = await db.collection('pills').limit(50).get();
+                return snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                }));
+            } catch (fallbackError) {
+                console.error("Fallback query also failed:", fallbackError);
+                return [];
+            }
+        }
         return [];
     }
 }
 
 // Listen to new pills in real-time
 function listenToNewPills(callback) {
+    console.log('Setting up Firestore listener for pills...');
+    
     const unsubscribe = db.collection('pills')
         .orderBy('createdAt', 'desc')
         .limit(20)
-        .onSnapshot((snapshot) => {
-            const pills = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            callback(pills);
-        });
+        .onSnapshot(
+            (snapshot) => {
+                console.log('Firestore listener fired. Docs:', snapshot.size);
+                const pills = snapshot.docs.map(doc => {
+                    const data = doc.data();
+                    
+                    // Convert Firestore timestamp to Date
+                    if (data.createdAt && data.createdAt.toDate) {
+                        data.createdAt = data.createdAt.toDate();
+                    }
+                    
+                    return {
+                        id: doc.id,
+                        ...data
+                    };
+                });
+                callback(pills);
+            },
+            (error) => {
+                console.error('Firestore listener error:', error);
+                
+                // If orderBy fails, try without it
+                if (error.code === 'failed-precondition' || error.message.includes('index')) {
+                    console.log('Trying listener without orderBy...');
+                    return db.collection('pills')
+                        .limit(20)
+                        .onSnapshot((snapshot) => {
+                            const pills = snapshot.docs.map(doc => ({
+                                id: doc.id,
+                                ...doc.data()
+                            }));
+                            callback(pills);
+                        });
+                }
+            }
+        );
 
     return unsubscribe;
 }
