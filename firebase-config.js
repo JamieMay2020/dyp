@@ -63,8 +63,7 @@ async function createPill(imageBlob, pillName) {
             creator: generateWalletAddress(),
             creatorId: currentUser.uid,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            upvotes: 0,
-            upvotedBy: []
+            upvotes: 0
         };
 
         console.log('Creating pill document in Firestore...');
