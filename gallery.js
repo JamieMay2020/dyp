@@ -1,22 +1,62 @@
 // Gallery Variables
 let userPills = [];
+let unsubscribe = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    loadUserPills();
+    // Wait for auth to be ready
+    setTimeout(() => {
+        loadUserPills();
+    }, 1000);
 });
 
-// Load pills from Firebase (or localStorage for demo)
+// Load pills from Firebase
 async function loadUserPills() {
-    // In real implementation, this would fetch from Firebase
-    // For now, we'll check localStorage for any saved pills
-    const savedPills = localStorage.getItem('userPills');
-    if (savedPills) {
-        userPills = JSON.parse(savedPills);
+    try {
+        // First, get pills from Firebase
+        const firebasePills = await getAllPills();
+        
+        // Also check localStorage for offline pills
+        const localPills = JSON.parse(localStorage.getItem('userPills') || '[]');
+        
+        // Merge pills (Firebase takes priority)
+        const pillsMap = new Map();
+        
+        // Add Firebase pills
+        firebasePills.forEach(pill => {
+            pillsMap.set(pill.id, pill);
+        });
+        
+        // Add local pills that might not be in Firebase yet
+        localPills.forEach(pill => {
+            if (!pillsMap.has(pill.id)) {
+                pillsMap.set(pill.id || `local-${Date.now()}`, pill);
+            }
+        });
+        
+        userPills = Array.from(pillsMap.values());
         displayPills();
-    } else {
-        // Show empty state
-        displayEmptyState();
+        
+        // Set up real-time listener
+        if (unsubscribe) {
+            unsubscribe();
+        }
+        
+        unsubscribe = listenToNewPills((pills) => {
+            userPills = pills;
+            displayPills();
+        });
+        
+    } catch (error) {
+        console.error('Error loading pills:', error);
+        // Fall back to localStorage
+        const savedPills = localStorage.getItem('userPills');
+        if (savedPills) {
+            userPills = JSON.parse(savedPills);
+            displayPills();
+        } else {
+            displayEmptyState();
+        }
     }
 }
 
@@ -55,13 +95,18 @@ function createPillCard(pill) {
     const card = document.createElement('div');
     card.className = 'pill-card';
     
+    const timeStr = pill.createdAt ? formatFirebaseTime(pill.createdAt) : formatTime(pill.createdAt);
+    
     card.innerHTML = `
         <img src="${pill.imageUrl}" alt="${pill.name}" class="pill-image">
         <div class="pill-info">
             <div class="pill-name">${pill.name}</div>
             <div class="pill-meta">
                 <span class="pill-creator">created by ${pill.creator}</span>
-                <span class="pill-time">${formatTime(pill.createdAt)}</span>
+                <span class="pill-time">${timeStr}</span>
+            </div>
+            <div class="pill-stats">
+                <span class="upvote-count">${pill.upvotes || 0} upvotes</span>
             </div>
         </div>
     `;
@@ -69,8 +114,10 @@ function createPillCard(pill) {
     return card;
 }
 
-// Format time
+// Format time for local storage items
 function formatTime(timestamp) {
+    if (!timestamp) return 'just now';
+    
     const date = new Date(timestamp);
     const now = new Date();
     const diff = now - date;
@@ -99,5 +146,18 @@ style.textContent = `
             transform: translateY(0);
         }
     }
+    
+    .pill-stats {
+        margin-top: 8px;
+        color: var(--accent-green);
+        font-size: 13px;
+    }
 `;
 document.head.appendChild(style);
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+    if (unsubscribe) {
+        unsubscribe();
+    }
+});
