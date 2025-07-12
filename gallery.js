@@ -134,26 +134,29 @@ function formatTime(timestamp) {
 }
 
 // CSS Animation
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
+if (!document.querySelector('style[data-gallery-styles]')) {
+    const style = document.createElement('style');
+    style.setAttribute('data-gallery-styles', 'true');
+    style.textContent = `
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        to {
-            opacity: 1;
-            transform: translateY(0);
+        
+        .pill-stats {
+            margin-top: 8px;
+            color: var(--accent-green);
+            font-size: 13px;
         }
-    }
-    
-    .pill-stats {
-        margin-top: 8px;
-        color: var(--accent-green);
-        font-size: 13px;
-    }
-`;
-document.head.appendChild(style);
+    `;
+    document.head.appendChild(style);
+}
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {
