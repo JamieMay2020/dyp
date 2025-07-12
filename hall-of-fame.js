@@ -4,21 +4,34 @@ let unsubscribe = null;
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    console.log('Hall of Fame page loaded, waiting for auth...');
+    
     // Wait for auth to be ready
-    setTimeout(() => {
-        loadTopPills();
-    }, 1000);
+    auth.onAuthStateChanged((user) => {
+        console.log('Auth state changed:', user ? 'User logged in' : 'No user');
+        if (user) {
+            loadTopPills();
+        } else {
+            console.log('Waiting for anonymous auth...');
+            setTimeout(() => {
+                loadTopPills();
+            }, 2000);
+        }
+    });
 });
 
 // Load top pills from Firebase
 function loadTopPills() {
     try {
+        console.log('Setting up listener for top pills...');
+        
         // Set up real-time listener for top pills
         if (unsubscribe) {
             unsubscribe();
         }
         
         unsubscribe = listenToTopPills((pills) => {
+            console.log('Received top pills:', pills.length);
             topPills = pills;
             if (topPills.length > 0) {
                 displayTopPills();
@@ -185,60 +198,63 @@ function formatTime(timestamp) {
     }
 }
 
-// CSS Animation and Styles
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-            transform: translateY(20px);
+// CSS Animation and Styles - Fixed to avoid duplicate declaration
+if (!document.querySelector('style[data-hall-styles]')) {
+    const style = document.createElement('style');
+    style.setAttribute('data-hall-styles', 'true');
+    style.textContent = `
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        to {
-            opacity: 1;
-            transform: translateY(0);
+        
+        .pill-actions {
+            margin-top: 12px;
         }
-    }
-    
-    .pill-actions {
-        margin-top: 12px;
-    }
-    
-    .upvote-btn {
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border-color);
-        border-radius: 6px;
-        padding: 6px 12px;
-        color: var(--text-secondary);
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        transition: all 0.2s;
-        font-size: 14px;
-    }
-    
-    .upvote-btn:hover {
-        background: var(--hover-bg);
-        color: var(--text-primary);
-        transform: translateY(-1px);
-    }
-    
-    .upvote-btn.upvoted {
-        background: var(--accent-green);
-        color: var(--bg-primary);
-        border-color: var(--accent-green);
-    }
-    
-    .upvote-icon {
-        font-size: 12px;
-    }
-    
-    .pill-time {
-        color: var(--text-tertiary);
-        font-size: 12px;
-    }
-`;
-document.head.appendChild(style);
+        
+        .upvote-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+        
+        .upvote-btn:hover {
+            background: var(--hover-bg);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+        
+        .upvote-btn.upvoted {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+            border-color: var(--accent-green);
+        }
+        
+        .upvote-icon {
+            font-size: 12px;
+        }
+        
+        .pill-time {
+            color: var(--text-tertiary);
+            font-size: 12px;
+        }
+    `;
+    document.head.appendChild(style);
+}
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {
