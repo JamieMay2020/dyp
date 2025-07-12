@@ -8,11 +8,6 @@ let currentTool = 'brush';
 let drawingHistory = [];
 let historyStep = -1;
 
-// Rate Limiting
-let createdPills = [];
-const RATE_LIMIT = 3;
-const RATE_LIMIT_WINDOW = 60000;
-
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupCanvas();
@@ -402,7 +397,7 @@ function clearCanvas() {
     }
 }
 
-// Complete pill
+// Complete pill - Updated to use Firebase
 async function completePill() {
     const pillName = document.getElementById('pillNameInput').value.trim();
     
@@ -415,40 +410,27 @@ async function completePill() {
     completeBtn.disabled = true;
     completeBtn.textContent = 'creating...';
     
-    // Check rate limit
-    const now = Date.now();
-    createdPills = createdPills.filter(timestamp => now - timestamp < RATE_LIMIT_WINDOW);
-    
-    if (createdPills.length >= RATE_LIMIT) {
-        showRateLimitWarning();
-        completeBtn.disabled = false;
-        completeBtn.textContent = 'create pill';
-        return;
-    }
-    
     // Convert the displayed canvas to blob
     canvas.toBlob(async (blob) => {
         try {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const base64data = reader.result;
-                
-                // Create pill object
-                const newPill = {
-                    id: `pill-${Date.now()}`,
-                    name: pillName,
-                    imageUrl: base64data,
-                    creator: generateWalletAddress(),
-                    createdAt: new Date().toISOString(),
-                    upvotes: 0
+            // Create pill in Firebase
+            const result = await createPill(blob, pillName);
+            
+            if (result.success) {
+                // Also save to localStorage for offline access
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64data = reader.result;
+                    const localPill = {
+                        ...result.pill,
+                        imageUrl: base64data
+                    };
+                    
+                    let userPills = JSON.parse(localStorage.getItem('userPills') || '[]');
+                    userPills.unshift(localPill);
+                    localStorage.setItem('userPills', JSON.stringify(userPills));
                 };
-                
-                // Save to localStorage
-                let userPills = JSON.parse(localStorage.getItem('userPills') || '[]');
-                userPills.unshift(newPill);
-                localStorage.setItem('userPills', JSON.stringify(userPills));
-                
-                createdPills.push(now);
+                reader.readAsDataURL(blob);
                 
                 // Show success modal
                 document.getElementById('completionModal').classList.add('active');
@@ -456,8 +438,13 @@ async function completePill() {
                 // Reset form
                 document.getElementById('pillNameInput').value = '';
                 completeBtn.disabled = true;
-            };
-            reader.readAsDataURL(blob);
+            } else {
+                if (result.error === "Rate limit exceeded") {
+                    showRateLimitWarning();
+                } else {
+                    alert('Error creating pill: ' + result.error);
+                }
+            }
             
         } catch (error) {
             console.error('Error creating pill:', error);
@@ -469,34 +456,22 @@ async function completePill() {
     }, 'image/png');
 }
 
-// Generate random wallet address
-function generateWalletAddress() {
-    const chars = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    let address = '';
-    for (let i = 0; i < 7; i++) {
-        address += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return address;
-}
-
 // Show rate limit warning
 function showRateLimitWarning() {
     const warning = document.getElementById('rateLimitWarning');
     const timeEl = document.getElementById('cooldownTime');
     
-    const oldest = Math.min(...createdPills);
-    const timeRemaining = Math.ceil((RATE_LIMIT_WINDOW - (Date.now() - oldest)) / 1000);
-    
+    let timeRemaining = 60;
     timeEl.textContent = timeRemaining;
     warning.classList.remove('hidden');
     
     const interval = setInterval(() => {
-        const remaining = Math.ceil((RATE_LIMIT_WINDOW - (Date.now() - oldest)) / 1000);
-        if (remaining <= 0) {
+        timeRemaining--;
+        if (timeRemaining <= 0) {
             warning.classList.add('hidden');
             clearInterval(interval);
         } else {
-            timeEl.textContent = remaining;
+            timeEl.textContent = timeRemaining;
         }
     }, 1000);
 }
