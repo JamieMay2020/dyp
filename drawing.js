@@ -406,6 +406,13 @@ async function completePill() {
         return;
     }
     
+    // Check if user is authenticated
+    if (!currentUser) {
+        console.error('No authenticated user');
+        alert('Please wait a moment and try again. Authentication is still loading.');
+        return;
+    }
+    
     const completeBtn = document.getElementById('completeBtn');
     completeBtn.disabled = true;
     completeBtn.textContent = 'creating...';
@@ -413,6 +420,9 @@ async function completePill() {
     // Convert the displayed canvas to blob
     canvas.toBlob(async (blob) => {
         try {
+            console.log('Starting pill creation process...');
+            console.log('Current user:', currentUser.uid);
+            
             // Create pill in Firebase
             const result = await createPill(blob, pillName);
             
