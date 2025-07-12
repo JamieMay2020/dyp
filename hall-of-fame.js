@@ -231,6 +231,13 @@ if (!document.querySelector('style[data-hall-styles]')) {
             transition: all 0.2s;
             font-size: 14px;
         }
+        /* Hall of Fame Page */
+.top-pill-card .pill-image {
+    width: 100%;
+    height: 200px;
+    object-fit: contain;
+    background: white;
+}
         
         .upvote-btn:hover {
             background: var(--hover-bg);
