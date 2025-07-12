@@ -15,15 +15,20 @@ const db = firebase.firestore();
 const storage = firebase.storage();
 const auth = firebase.auth();
 
-// Initialize anonymous auth
-auth.signInAnonymously().catch((error) => {
-    console.error("Auth error:", error);
-});
+// Initialize anonymous auth with better error handling
+auth.signInAnonymously()
+    .then(() => {
+        console.log("Anonymous auth successful");
+    })
+    .catch((error) => {
+        console.error("Auth error:", error);
+    });
 
 // Global user state
 let currentUser = null;
 auth.onAuthStateChanged((user) => {
     currentUser = user;
+    console.log("Auth state changed:", user ? `User: ${user.uid}` : "No user");
 });
 
 // === FIRESTORE FUNCTIONS ===
@@ -63,8 +68,16 @@ async function createPill(imageBlob, pillName) {
         };
 
         console.log('Creating pill document in Firestore...');
-        const docRef = await db.collection('pills').add(pillData);
+        const docRef = await db.collection('tods').add(pillData);
         console.log('Pill created successfully with ID:', docRef.id);
+
+        // Track in user activity
+        await db.collection('userActivity').doc(currentUser.uid)
+            .collection('creations').doc(docRef.id)
+            .set({
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                todId: docRef.id
+            });
 
         // Update user's rate limit
         await updateRateLimit();
@@ -86,7 +99,7 @@ async function getUserPills() {
     try {
         if (!currentUser) return [];
 
-        const snapshot = await db.collection('pills')
+        const snapshot = await db.collection('tods')
             .where('creatorId', '==', currentUser.uid)
             .orderBy('createdAt', 'desc')
             .get();
@@ -105,7 +118,7 @@ async function getUserPills() {
 async function getAllPills() {
     try {
         console.log('Fetching all pills from Firestore...');
-        const snapshot = await db.collection('pills')
+        const snapshot = await db.collection('tods')
             .orderBy('createdAt', 'desc')
             .limit(50)
             .get();
@@ -154,7 +167,7 @@ async function getAllPills() {
 function listenToNewPills(callback) {
     console.log('Setting up Firestore listener for pills...');
     
-    const unsubscribe = db.collection('pills')
+    const unsubscribe = db.collection('tods')
         .orderBy('createdAt', 'desc')
         .limit(20)
         .onSnapshot(
@@ -181,7 +194,7 @@ function listenToNewPills(callback) {
                 // If orderBy fails, try without it
                 if (error.code === 'failed-precondition' || error.message.includes('index')) {
                     console.log('Trying listener without orderBy...');
-                    return db.collection('pills')
+                    return db.collection('tods')
                         .limit(20)
                         .onSnapshot((snapshot) => {
                             const pills = snapshot.docs.map(doc => ({
@@ -199,7 +212,7 @@ function listenToNewPills(callback) {
 
 // Listen to top pills in real-time
 function listenToTopPills(callback) {
-    const unsubscribe = db.collection('pills')
+    const unsubscribe = db.collection('tods')
         .orderBy('upvotes', 'desc')
         .limit(20)
         .onSnapshot((snapshot) => {
@@ -218,11 +231,14 @@ async function getUserUpvotes() {
     try {
         if (!currentUser) return [];
 
-        const doc = await db.collection('users').doc(currentUser.uid).get();
-        if (doc.exists) {
-            return doc.data().upvotedPills || [];
-        }
-        return [];
+        const snapshot = await db.collection('upvotes')
+            .where('userId', '==', currentUser.uid)
+            .get();
+        
+        return snapshot.docs.map(doc => {
+            const data = doc.data();
+            return data.todId;
+        });
     } catch (error) {
         console.error("Error getting user upvotes:", error);
         return [];
@@ -236,8 +252,8 @@ async function toggleUpvoteFirebase(pillId, isCurrentlyUpvoted) {
             throw new Error("User not authenticated");
         }
 
-        const pillRef = db.collection('pills').doc(pillId);
-        const userRef = db.collection('users').doc(currentUser.uid);
+        const pillRef = db.collection('tods').doc(pillId);
+        const upvoteRef = db.collection('upvotes').doc(`${currentUser.uid}_${pillId}`);
 
         // Use a transaction to ensure consistency
         await db.runTransaction(async (transaction) => {
@@ -249,45 +265,25 @@ async function toggleUpvoteFirebase(pillId, isCurrentlyUpvoted) {
 
             const pillData = pillDoc.data();
             let newUpvotes = pillData.upvotes || 0;
-            let upvotedBy = pillData.upvotedBy || [];
 
             if (isCurrentlyUpvoted) {
                 // Remove upvote
                 newUpvotes = Math.max(0, newUpvotes - 1);
-                upvotedBy = upvotedBy.filter(uid => uid !== currentUser.uid);
+                transaction.delete(upvoteRef);
             } else {
                 // Add upvote
                 newUpvotes += 1;
-                if (!upvotedBy.includes(currentUser.uid)) {
-                    upvotedBy.push(currentUser.uid);
-                }
+                transaction.set(upvoteRef, {
+                    userId: currentUser.uid,
+                    todId: pillId,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
             }
 
-            // Update pill
+            // Update pill upvote count
             transaction.update(pillRef, {
-                upvotes: newUpvotes,
-                upvotedBy: upvotedBy
+                upvotes: newUpvotes
             });
-
-            // Update user's upvoted pills
-            const userDoc = await transaction.get(userRef);
-            let userUpvotes = [];
-            
-            if (userDoc.exists) {
-                userUpvotes = userDoc.data().upvotedPills || [];
-            }
-
-            if (isCurrentlyUpvoted) {
-                userUpvotes = userUpvotes.filter(id => id !== pillId);
-            } else {
-                if (!userUpvotes.includes(pillId)) {
-                    userUpvotes.push(pillId);
-                }
-            }
-
-            transaction.set(userRef, {
-                upvotedPills: userUpvotes
-            }, { merge: true });
         });
 
         return { success: true };
